@@ -9,6 +9,7 @@ from discord.poll import Poll
 from discord.embeds import Embed
 import discord.ui as dui
 from discord import _types
+from discord.utils import MISSING
 
 locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
 
@@ -34,6 +35,29 @@ def prochain_mardi():
 
     return proch_mardi
 
+class BienvenueModal(dui.Modal):
+    ti: dui.TextInput[dui.LayoutView]
+    text_channel: discord.TextChannel
+
+    def __init__(self, *, 
+                 sname : str, text_channel: discord.TextChannel, title: str = "Modal", 
+                 timeout: float | None = None, 
+                 custom_id: str = "") -> None:
+        super().__init__(title=title, timeout=timeout, custom_id=custom_id)
+
+        self.text_channel = text_channel
+
+        self.add_item(dui.TextDisplay(f"Tu as acces au salon #{sname} 🥷"))
+        self.ti = dui.TextInput(label=f"Tu peux aussi proposer un film", required=False)
+        self.add_item(self.ti)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        print(self.ti)
+
+        await self.text_channel.send(f"Proposition de film {self.ti}")
+        await interaction.response.send_message("Merci", ephemeral=True)
+    
+
 
 async def interesse(interaction: discord.Interaction, view: dui.LayoutView):
 
@@ -41,7 +65,7 @@ async def interesse(interaction: discord.Interaction, view: dui.LayoutView):
 
     assert guild is not None
 
-    print(guild.roles)
+    # print(guild.roles)
 
     date = prochain_mardi().strftime("%d %B %Y")
 
@@ -56,8 +80,8 @@ async def interesse(interaction: discord.Interaction, view: dui.LayoutView):
 
     await member.add_roles(role, reason="car sortie")
 
-    print(guild.categories)
-    print(guild.channels)
+    #print(guild.categories)
+    #print(guild.channels)
 
     cat_salons = discord.utils.get(guild.categories, name="Sorties")
     if cat_salons is None:
@@ -82,18 +106,21 @@ async def interesse(interaction: discord.Interaction, view: dui.LayoutView):
             }
         )
 
-    print(role)
+    #print(role)
 
-    modal = dui.Modal(title="Bonjour")
-    modal.add_item(dui.TextInput(label="Texte"))
+    modal = BienvenueModal(title="Info", sname=sname, custom_id="modal_bienvenue", text_channel= salon)
 
-    # await interaction.response.send_modal(modal)
+    mod = await interaction.response.send_modal(modal)
+
+    #print(mod)
+
+    #print(mod.resource)
 
     # await interaction.edit_original_response(view=view)
 
-    await interaction.response.send_message(
-        f"Tu as accès au salon #{sname}.", ephemeral=True
-    )
+    #await interaction.response.send_message(
+    #    f"Tu as accès au salon #{sname}.", ephemeral=True
+    #)
 
 class CineSondageView(dui.LayoutView):
     votes: dict[int, int]
@@ -177,7 +204,7 @@ class InterestedButton(dui.Button[discord.ui.View]):
 
     async def callback(self, interaction: discord.Interaction[_types.ClientT]) -> ty.Any:
         print("bouton")
-        print(interaction)
+        #print(interaction)
 
         #await interesse(interaction=interaction, view=self)
 
