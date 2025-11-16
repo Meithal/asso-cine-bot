@@ -9,7 +9,6 @@ from discord.poll import Poll
 from discord.embeds import Embed
 import discord.ui as dui
 from discord import _types
-from discord.utils import MISSING
 
 locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
 
@@ -60,7 +59,9 @@ class BienvenueModal(dui.Modal):
 
 
 async def interesse(interaction: discord.Interaction, view: dui.LayoutView):
-
+    """
+    Ce qui se passe si quelquun clique sur interessé
+    """
     guild = interaction.guild
 
     assert guild is not None
@@ -94,7 +95,7 @@ async def interesse(interaction: discord.Interaction, view: dui.LayoutView):
         )
     sname = to_channel_name(date)
 
-    salon = discord.utils.get(guild.channels, name=sname)
+    salon = discord.utils.get(guild.text_channels, name=sname)
     if salon is None:
         salon = await guild.create_text_channel(
             sname, 
@@ -108,9 +109,9 @@ async def interesse(interaction: discord.Interaction, view: dui.LayoutView):
 
     #print(role)
 
-    modal = BienvenueModal(title="Info", sname=sname, custom_id="modal_bienvenue", text_channel= salon)
+    modal = BienvenueModal(title="Info", sname=sname, custom_id="modal_bienvenue", text_channel=salon)
 
-    mod = await interaction.response.send_modal(modal)
+    await interaction.response.send_modal(modal)
 
     #print(mod)
 
@@ -123,6 +124,10 @@ async def interesse(interaction: discord.Interaction, view: dui.LayoutView):
     #)
 
 class CineSondageView(dui.LayoutView):
+    """
+    La vue qui affiche un carton
+    ou on peut voter
+    """
     votes: dict[int, int]
     container: dui.Container[dui.LayoutView]
     votes_text: dui.TextDisplay[dui.LayoutView]
@@ -161,18 +166,22 @@ class CineSondageView(dui.LayoutView):
     async def button_interesse_callback(self, interaction: discord.Interaction):
         # await interaction.response.send_message("gg", ephemeral=True)
         self.votes[interaction.user.id] = 1
+        print(interaction.user.display_name, "interesse")
+
         self.refresh_votes()
         await interesse(interaction=interaction, view=self)
         await self.message.edit(view=self)
 
     async def button_non_callback(self, interaction: discord.Interaction):
         self.votes[interaction.user.id] = 2
+        print(interaction.user.display_name, "pas interesse")
         self.refresh_votes()
         await self.message.edit(view=self)
         await interaction.response.defer(ephemeral=True)
     
     async def button_depend_callback(self, interaction: discord.Interaction):
         self.votes[interaction.user.id] = 3
+        print(interaction.user.display_name, "indecis")
         self.refresh_votes()
         await interesse(interaction, self)
         await self.message.edit(view=self)
@@ -186,7 +195,11 @@ class CineSondageView(dui.LayoutView):
         rn = round(vn / tot * 10)
         rp = round(vp / tot * 10)
 
-        votext: dui.TextDisplay[dui.LayoutView] = self.container.find_item(42)
+        td = self.container.find_item(42)
+
+        assert isinstance(td, dui.TextDisplay)
+
+        votext: dui.TextDisplay[dui.LayoutView] = td
         votext.content = (f"""
 **Oui**
 `{'🟩'*ro}{'⬛'*(10-ro)}` {vo} • {ro}%\n
@@ -212,6 +225,14 @@ class InterestedButton(dui.Button[discord.ui.View]):
 
 class MyClient(discord.Client):
 
+    def __init__(self, *, intents: discord.Intents, **options: ...) -> None:
+        super().__init__(intents=intents, **options)
+
+        self.tree = discord.app_commands.CommandTree(self)
+
+    async def setup_hook(self) -> None:
+        await self.tree.sync()
+        return await super().setup_hook()
 
     async def on_ready(self):
         print(f'Logged on as {self.user}!')
@@ -263,22 +284,55 @@ class MyClient(discord.Client):
 
             #self.view.add_item(dui.ActionRow())
 
-            view = dui.View()
-            view.add_item(InterestedButton(label="Toto", ))
-
             msg = await message.channel.send(
                 view=self.view,
             )
             self.view.message = msg
 
             # await message.channel.send(embed=embed)
-    #async def on_
 
 intents = discord.Intents.default()
 intents.message_content = True
 intents.typing = False
 
 client = MyClient(intents=intents)
+
+
+@client.tree.command(name="seance", description="Lance un sondage de seance")
+async def seance(interaction: discord.Interaction, salon: str):
+    assert type(interaction.client) is CineSondageView
+    view: CineSondageView = interaction.client.view
+    message = interaction.message
+    if not salon:
+        assert message is not None
+        chan = message.channel
+    else:
+        assert interaction.guild is not None
+        chan = discord.utils.get(interaction.guild.text_channels, name=salon)
+        assert chan is not None
+
+    print("seance demandee")
+    # todo : ici on veut aussi pouvoir
+    # recuperer un message deja existant si besoin
+    msg = await chan.send(
+        view=view,
+    )
+    view.message = msg
+
+    # await interaction.response.send_message("Message recu", ephemeral=True)
+
+@seance.autocomplete('salon')
+async def text_channels(
+    interaction: discord.Interaction, 
+    salon: str) -> ty.List[discord.app_commands.Choice[str]]:
+    print(interaction.namespace)
+
+    guild = interaction.guild
+    assert guild is not None
+    return [
+        discord.app_commands.Choice(name="#"+tc.name, value=tc.name)
+        for tc in guild.text_channels
+    ]
 
 token = open('BOTTOKEN').read()
 
